@@ -1,0 +1,66 @@
+Am rezolvat cerintele:
+    - Procesul de dirijare (30p)
+    - Protocolul ARP (33p)
+    - Protocolul ICMP (21p)
+
+
+PROCESUL DE DIRIJARE
+
+Pentru aceasta cerinta am urmat pasii descrisi in laboratorul 4, utilizand functia
+send_IPv4() :
+    - am verificat checksum-ul, iar in cazul in care nu corespunde, arunc pachetul
+    - caut ruta cea mai buna, iar in cazul in care nu gasesc, trimit inapoi in raspuns ICMP
+    - am verificat ttl, iar in cazul in care acesta a expirat, generez un raspuns ICMP
+    - dupa decrementarea ttl recalculez checksum
+    - caut intrare in tabela ARP adresa mac pentru next-hop, iar daca nu o gasesc generez
+    un ARP request
+    - la final actualizez adresele mac din headerul de ethernet si trimit pachetul
+
+PROTOCOLUL ARP
+
+Acest protocol acopera situatia in care in tabela ARP este generata dinamic.
+ARP request-ul este generat in functia send_ARP_request(). Aici se construieste un pachet
+ARP ce consta dintr-un header de ethernet ce contine la adresa mac sursa adresa mac a
+interfetei prin care iesim catre next-hop iar la adresa mac destinatie adresa de brodcast,
+si un header ARP. Headerul ARP contine ip-ul interfetei de pe care trimit, ip-ul destinatie
+determinat din ruta cea mai potrivita, iar adresele mac asemanatoare cu cele din headerul
+de ethernet. Apoi pachetul pe care l-am primit este pus in asteptare intr-o coada. In
+aceasta coada este utilizata structura que_packet care retine pachetul si ruta pe care
+trebuie sa o urmeze. De asemenea este incrementat si numarul de pachete din coada. La final
+este trimis pachetul ARP.
+
+In main() se verifica tipul de pachet ARP primit (request sau reply). In cazul unui request,
+este actualizat headerul ARP cu ip-urile potrivite si adresa mac ceruta de ARP request, dar
+si headerul de ethernet cu adresele mac corespunzatoare. Apoi se trimite ARP reply catre
+sursa. In cazul in care avem un ARP reply, vom adauga o noua intrare in tabela ARP cu datele
+primite. Apoi vom parcurge coada de pachete si vom cauta pachetele care trebuie trimise,
+acum avand adresa mac corespunzatoare. Vom scoate pe rand cate un pachet si verificam 
+daca avem intrare in tabela ARP. Daca pachetul curent nu poate fi trimis este readaugat 
+in coada. Daca pachetul poate fi trimis, ii actualizez headerul de ethernet si il trimit.
+Astfel scot din coada toate pachetele care pot fi trimise. In coada parcurg doar cate
+pachete sunt indicate de numarul de pachete(que_len), evitand ciclarea la infinit. La final
+actualizez numarul de pachete din coada (count este numarul de pachete trimise din coada).
+
+PROTOCOLUL ICMP
+
+In main() verific daca pachetul primit este de tip IPv4. In cazul in care pachetul ii este
+destinat router-ului inseamna ca am un "Echo request" si trimit inapoi un "Echo reply",
+cu ajutorul functiei send_ICMP_echo_reply(). Aici verific checksum si il arunc daca
+nu este corespunzator, dar si ttl, care daca este expirat trimit un raspuns ICMP de
+tipul Time exceeded (type 11, code 0) cu ajutorul functiei send_ICMP_ttl_dest(). Daca este
+in regula, actualizez headerul de ethernet (inversez adresele mac), headerul de ip
+(inversez adresele ip sursa si destinatie) si headerul icmp cu noul type (0), dar si
+checksum. Apoi trimit pachetul.
+
+Pentru celelalte doua situatii (Time exceeded (type 11, code 0), Destination unreachable
+(type 3, code 0)), utilizez functia send_ICMP_ttl_dest(). Aici construiesc pachetul ICMP
+corespunzator. Creez un header de ethernet in care pun la adresa mac surasa, adresa mac
+destinatie a pachetului primit si la adresa destinatie, adresa sursa a pachetului primit.
+Apoi construiesc un header de IP in care setez adreza ip sursa la ip-ul routerului de
+pe care trimit si la ip destinatie, ip-ul sursa al pachetului primit. Setez lungimea
+totala a headerului de ip, protocolul la 1 (ICMP) si ihl la 5, dupa aceea calculez
+checksum. Pentru headerul icmp setez type in functie de situatie (parametrul case_icmp al
+functiei dat la apelul functiei in cele doua situatii), code la 0 si checksum. La final
+asamblez pachetul icmp intr-un buffer in care pun si headerul ip vechi + 64 de biti
+din paylodul pachetului primit si trimit pachetul pe aceeasi interfata pe care l-am
+primit.
